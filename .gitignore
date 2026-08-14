@@ -1,0 +1,20 @@
+# Secrets -- never commit real API keys
+
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+venv/
+env/
+*.egg-info/
+
+# Local run traces -- these can contain content pulled from arbitrary
+# web sources, not something you want in version control
+traces/*.jsonl
+
+# OS cruft
+.DS_Store
+Thumbs.db
