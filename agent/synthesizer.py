@@ -13,13 +13,11 @@ text maps to a real, correctly-supporting fact -- rather than trusting
 the model's citations on faith.
 """
 
-import json
 import anthropic
 
 from .config import Settings
 from .schemas import ResearchResult, SourceFact, DraftReport
 from .trace import Tracer
-from .llm_utils import extract_text
 
 SYNTHESIZER_SYSTEM_PROMPT = """You are the synthesis stage of a research agent.
 
@@ -44,13 +42,35 @@ the text rather than silently picking one side.
 - Write in clear, professional prose. Markdown formatting (headers, \
 bullet points) is fine for structure.
 
-Respond with ONLY valid JSON, no other text:
-{
-  "title": "...",
-  "summary": "2-3 sentence summary of the report's findings",
-  "body_markdown": "full report body with inline [n] citations"
-}
+Call the submit_report tool with your finished report. Do not respond \
+with plain text.
 """
+
+# Using tool_use instead of asking the model to hand-write JSON.
+# body_markdown is long free text with quotes, headers, and nested
+# punctuation -- exactly the content that breaks manually-parsed JSON
+# when the model forgets to escape a character. Passing an input_schema
+# and forcing tool_choice makes the API itself responsible for producing
+# valid structured output, so this whole class of parse error goes away.
+REPORT_TOOL = {
+    "name": "submit_report",
+    "description": "Submit the finished synthesized research report.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "Report title"},
+            "summary": {
+                "type": "string",
+                "description": "2-3 sentence summary of the report's findings",
+            },
+            "body_markdown": {
+                "type": "string",
+                "description": "Full report body in markdown, with inline [n] citations",
+            },
+        },
+        "required": ["title", "summary", "body_markdown"],
+    },
+}
 
 
 class Synthesizer:
@@ -91,8 +111,14 @@ class Synthesizer:
 
         response = self.client.messages.create(
             model=self.settings.model,
-            max_tokens=3000,
+            # Raised from 3000 -- with 100+ facts to synthesize, the
+            # report body alone can run long, and a cut-off tool call
+            # was producing incomplete JSON (missing body_markdown)
+            # rather than a clean error. 8192 gives real headroom.
+            max_tokens=8192,
             system=SYNTHESIZER_SYSTEM_PROMPT,
+            tools=[REPORT_TOOL],
+            tool_choice={"type": "tool", "name": "submit_report"},
             messages=[
                 {
                     "role": "user",
@@ -104,8 +130,26 @@ class Synthesizer:
             ],
         )
 
-        raw_text = extract_text(response)
-        parsed = _parse_json(raw_text)
+        if response.stop_reason == "max_tokens":
+            # The model ran out of room mid-generation. Fail loudly and
+            # specifically here rather than letting it surface as a
+            # confusing KeyError three lines later.
+            raise RuntimeError(
+                "Synthesizer response was cut off (hit max_tokens before "
+                "finishing). The report is likely too long for the current "
+                "limit -- consider reducing sources_per_sub_question in "
+                "Settings, or raising max_tokens further."
+            )
+
+        tool_call = _find_tool_use(response, "submit_report")
+        parsed = tool_call.input  # already a validated dict, no JSON parsing needed
+
+        missing_keys = [k for k in ("title", "summary", "body_markdown") if k not in parsed]
+        if missing_keys:
+            raise ValueError(
+                f"Synthesizer tool call is missing required field(s): {missing_keys}. "
+                f"stop_reason was '{response.stop_reason}'."
+            )
 
         draft = DraftReport(
             title=parsed["title"],
@@ -122,10 +166,11 @@ class Synthesizer:
         return draft
 
 
-def _parse_json(text: str) -> dict:
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("```")[1]
-        if cleaned.startswith("json"):
-            cleaned = cleaned[4:]
-    return json.loads(cleaned.strip())
+def _find_tool_use(response, tool_name: str):
+    for block in response.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == tool_name:
+            return block
+    raise ValueError(
+        f"Expected a '{tool_name}' tool call in the response but found none. "
+        f"Block types present: {[getattr(b, 'type', type(b).__name__) for b in response.content]}"
+    )
