@@ -50,7 +50,16 @@ class DraftReport(BaseModel):
 
 
 class CritiqueIssue(BaseModel):
-    severity: str = Field(..., description="'unsupported_claim' | 'gap' | 'contradiction'")
+    severity: str = Field(
+        ...,
+        description=(
+            "'unsupported_claim' | 'gap' | 'contradiction' | 'weak_sourcing'. "
+            "weak_sourcing flags claims presented with unwarranted confidence "
+            "when they rest on a single non-authoritative source (e.g. an "
+            "opinion post or forum comment) -- distinct from unsupported_claim, "
+            "since the claim IS backed by a citation, just a weak one."
+        ),
+    )
     location: str = Field(..., description="Which part of the report this refers to")
     description: str
 

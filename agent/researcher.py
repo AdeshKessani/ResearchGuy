@@ -98,7 +98,8 @@ class Researcher:
         return result
 
     def research_all(self, sub_questions: list[SubQuestion]) -> list[ResearchResult]:
-        return [self.research(sq) for sq in sub_questions]
+        results = [self.research(sq) for sq in sub_questions]
+        return _cap_total_facts(results, self.settings.max_total_facts)
 
     def _extract_facts(self, question: str, content: str) -> list[str]:
         # Truncate long pages -- extraction doesn't need the whole article,
@@ -134,3 +135,39 @@ def _parse_json(text: str) -> dict:
         if cleaned.startswith("json"):
             cleaned = cleaned[4:]
     return json.loads(cleaned.strip())
+
+
+def _cap_total_facts(
+    results: list[ResearchResult], max_total: int
+) -> list[ResearchResult]:
+    """
+    Trim the total fact count across all sub-questions down to max_total,
+    removing evenly from whichever sub-question currently has the most
+    facts rather than just truncating the tail of the list. This avoids
+    one sub-question (e.g. the one researched first) silently keeping
+    all its facts while a later one gets starved.
+    """
+    total = sum(len(r.facts) for r in results)
+    if total <= max_total:
+        return results
+
+    # Work on plain lists we can mutate, keyed by sub_question_id.
+    facts_by_id = {r.sub_question_id: list(r.facts) for r in results}
+    overflow = total - max_total
+
+    for _ in range(overflow):
+        # Remove one fact from whichever sub-question currently has the
+        # most -- keeps trimming balanced across sub-questions.
+        fattest_id = max(facts_by_id, key=lambda k: len(facts_by_id[k]))
+        if facts_by_id[fattest_id]:
+            facts_by_id[fattest_id].pop()
+
+    return [
+        ResearchResult(
+            sub_question_id=r.sub_question_id,
+            query_used=r.query_used,
+            facts=facts_by_id[r.sub_question_id],
+            notes=r.notes,
+        )
+        for r in results
+    ]

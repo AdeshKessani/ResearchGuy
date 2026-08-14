@@ -28,6 +28,7 @@ class Settings:
     max_sub_questions: int = 6
     sources_per_sub_question: int = 3
     max_revision_passes: int = 2
+    max_total_facts: int = 130
 
 
 def load_settings() -> Settings:
