@@ -109,7 +109,7 @@ class Critic:
     def __init__(self, settings: Settings, tracer: Tracer):
         self.settings = settings
         self.tracer = tracer
-        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=settings.request_timeout_seconds)
 
     def critique(self, draft: DraftReport, original_question: str) -> CritiqueResult:
         numbered_facts = "\n".join(

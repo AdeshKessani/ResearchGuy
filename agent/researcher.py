@@ -41,7 +41,7 @@ class Researcher:
     def __init__(self, settings: Settings, tracer: Tracer):
         self.settings = settings
         self.tracer = tracer
-        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=settings.request_timeout_seconds)
         self.tavily = TavilyClient(api_key=settings.tavily_api_key)
 
     def research(self, sub_question: SubQuestion) -> ResearchResult:

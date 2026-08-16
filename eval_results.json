@@ -1,0 +1,66 @@
+[
+  {
+    "question": "What are the tradeoffs between building agents with LangGraph vs a hand-rolled loop?",
+    "category": "technical",
+    "revision_count": 2,
+    "known_gaps_count": 5,
+    "citation_integrity": {
+      "num_citations_available": 114,
+      "num_citation_markers_used": 108,
+      "out_of_range_citations": [],
+      "citation_integrity_passed": true,
+      "citation_usage_rate": 0.947
+    },
+    "judge_passes": true,
+    "judge_issues": [
+      {
+        "severity": "unsupported_claim",
+        "description": "The report claims fact [6] and fact [76] describe 'a distinct typed-state mechanism' and explicitly reconciles them ('even though it describes a distinct typed-state mechanism from the Pydantic BaseModel approach reported elsewhere [6]'), but the facts don't establish this distinction is meaningful or that this reconciliation is accurate -- this is an inference presented as settled fact about how the two sources relate."
+      },
+      {
+        "severity": "unsupported_claim",
+        "description": "The report states 'note: fact [65] is drawn from a separate, distinct source \u2014 a Zylos Research report \u2014 rather than the Latenode post' -- this is accurate per the fact list, but the report weaves it into a paragraph structured around the Latenode account in a way that could still mislead about which claims are corroborated; however this is more a minor clarity issue than a fabrication."
+      },
+      {
+        "severity": "unsupported_claim",
+        "description": "The report's reconciliation of the two conflicting benchmarks (Aerospike vs MCP Server) -- 'these two claims are not strictly contradictory \u2014 they could both be true if LangGraph's advantage grows with workflow complexity' -- is a speculative hypothesis not supported by any fact. The facts only state the two conflicting claims [84] vs [85][88]; the explanation for why they might not conflict is invented reasoning not grounded in the source material, though the report does flag it as 'a plausible reading rather than something the evidence directly establishes,' which mitigates the issue somewhat."
+      },
+      {
+        "severity": "unsupported_claim",
+        "description": "The claim 'though a hand-rolled loop that wants comparable recoverability would likely need to build similar persistence itself' is a reasonable inference but not directly sourced from any numbered fact -- it's the report's own analytical add-on presented within the factual narrative."
+      }
+    ],
+    "run_id": "eval_1786923282_0"
+  },
+  {
+    "question": "PostgreSQL vs MongoDB for a high-write analytics workload -- which is better and why?",
+    "category": "comparative",
+    "revision_count": 1,
+    "known_gaps_count": 0,
+    "citation_integrity": {
+      "num_citations_available": 130,
+      "num_citation_markers_used": 127,
+      "out_of_range_citations": [
+        2026
+      ],
+      "citation_integrity_passed": false,
+      "citation_usage_rate": 0.977
+    },
+    "judge_passes": false,
+    "judge_issues": [
+      {
+        "severity": "unsupported_claim",
+        "description": "The report states 'Acknowledging a write upon journaling (rather than after it is fully applied in memory) is a different durability posture... this kind of change can in principle affect the window of data that could be lost on a crash before the journal write completes.' This is the report's own technical speculation/analysis not directly backed by any numbered fact - facts [7][127][128] describe the mechanism but none support this specific durability risk analysis being asserted."
+      },
+      {
+        "severity": "weak_sourcing",
+        "description": "The report repeatedly and appropriately flags single-source claims (good practice), but the specific numeric figures like '1.6 to 15.1 times faster' [124] and '65-80%' [68] and '54% faster' [6][24][122] are presented with the caveat language but still given prominent placement in the conclusion bullet points as if quantitatively meaningful, despite originating from one promotional/non-independent source. The hedging is present but the specific numbers are still used as if informative rather than being excluded or more strongly discounted."
+      },
+      {
+        "severity": "unsupported_claim",
+        "description": "The report claims 'much of this evidence comes from a single, promotionally-titled source' when characterizing the MongoDB write-throughput advantage, but also cites [22][64][66] for schema flexibility development speed claims in the same bullet, which are also from that same single source - the report's self-aware caveating is inconsistently applied but this is more a minor stylistic issue than a factual error."
+      }
+    ],
+    "run_id": "eval_1786923525_1"
+  }
+]

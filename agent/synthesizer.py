@@ -77,7 +77,7 @@ class Synthesizer:
     def __init__(self, settings: Settings, tracer: Tracer):
         self.settings = settings
         self.tracer = tracer
-        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=settings.request_timeout_seconds)
 
     def synthesize(
         self, original_question: str, research_results: list[ResearchResult]
@@ -109,46 +109,69 @@ class Synthesizer:
             for i, fact in enumerate(all_facts)
         )
 
-        response = self.client.messages.create(
-            model=self.settings.model,
-            # Raised from 3000 -- with 100+ facts to synthesize, the
-            # report body alone can run long, and a cut-off tool call
-            # was producing incomplete JSON (missing body_markdown)
-            # rather than a clean error. 8192 gives real headroom.
-            max_tokens=8192,
-            system=SYNTHESIZER_SYSTEM_PROMPT,
-            tools=[REPORT_TOOL],
-            tool_choice={"type": "tool", "name": "submit_report"},
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"Research question: {original_question}\n\n"
-                        f"Numbered facts:\n{numbered_facts}"
-                    ),
-                }
-            ],
-        )
+        parsed = None
+        last_error = None
 
-        if response.stop_reason == "max_tokens":
-            # The model ran out of room mid-generation. Fail loudly and
-            # specifically here rather than letting it surface as a
-            # confusing KeyError three lines later.
-            raise RuntimeError(
-                "Synthesizer response was cut off (hit max_tokens before "
-                "finishing). The report is likely too long for the current "
-                "limit -- consider reducing sources_per_sub_question in "
-                "Settings, or raising max_tokens further."
+        # Retry loop: the model occasionally omits a required tool-call
+        # field even when the response wasn't truncated (stop_reason
+        # 'tool_use', not 'max_tokens') -- observed in practice during
+        # eval, not a truncation problem. This is sporadic model
+        # non-compliance rather than a real bug, so a retry is the
+        # right fix, unlike the Critic's 'passes' field which could be
+        # derived instead.
+        for attempt in range(self.settings.max_field_retries):
+            response = self.client.messages.create(
+                model=self.settings.model,
+                # Raised from 3000 -- with 100+ facts to synthesize, the
+                # report body alone can run long, and a cut-off tool call
+                # was producing incomplete JSON (missing body_markdown)
+                # rather than a clean error. 8192 gives real headroom.
+                max_tokens=8192,
+                system=SYNTHESIZER_SYSTEM_PROMPT,
+                tools=[REPORT_TOOL],
+                tool_choice={"type": "tool", "name": "submit_report"},
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Research question: {original_question}\n\n"
+                            f"Numbered facts:\n{numbered_facts}"
+                        ),
+                    }
+                ],
             )
 
-        tool_call = _find_tool_use(response, "submit_report")
-        parsed = tool_call.input  # already a validated dict, no JSON parsing needed
+            if response.stop_reason == "max_tokens":
+                # Genuine truncation -- retrying won't help, this needs
+                # a real fix (fewer facts or a higher limit), so fail
+                # loudly rather than retry into the same wall.
+                raise RuntimeError(
+                    "Synthesizer response was cut off (hit max_tokens before "
+                    "finishing). The report is likely too long for the current "
+                    "limit -- consider reducing sources_per_sub_question in "
+                    "Settings, or raising max_tokens further."
+                )
 
-        missing_keys = [k for k in ("title", "summary", "body_markdown") if k not in parsed]
-        if missing_keys:
+            tool_call = _find_tool_use(response, "submit_report")
+            candidate = tool_call.input
+
+            missing_keys = [
+                k for k in ("title", "summary", "body_markdown") if k not in candidate
+            ]
+            if not missing_keys:
+                parsed = candidate
+                break
+
+            last_error = (
+                f"attempt {attempt + 1}/{self.settings.max_field_retries}: "
+                f"missing {missing_keys}"
+            )
+
+        if parsed is None:
             raise ValueError(
-                f"Synthesizer tool call is missing required field(s): {missing_keys}. "
-                f"stop_reason was '{response.stop_reason}'."
+                f"Synthesizer tool call kept missing required fields after "
+                f"{self.settings.max_field_retries} attempts. Last failure: "
+                f"{last_error}"
             )
 
         draft = DraftReport(

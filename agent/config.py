@@ -28,7 +28,23 @@ class Settings:
     max_sub_questions: int = 6
     sources_per_sub_question: int = 3
     max_revision_passes: int = 2
+    # Hard cap on total facts passed into Synthesizer/Critic/Reviser.
+    # 138 facts was enough to push a critique response past 4096 output
+    # tokens and truncate mid-tool-call. Capping here keeps every
+    # downstream stage's input bounded and predictable, rather than
+    # chasing max_tokens upward every time the fact count grows.
     max_total_facts: int = 130
+    # A run during eval hung indefinitely on a stalled network read with
+    # no way to recover -- the only exit was Ctrl+C. Every Anthropic
+    # client in the codebase now passes this timeout so a stalled call
+    # fails loudly instead of hanging forever.
+    request_timeout_seconds: float = 60.0
+    # Some stages (currently Synthesizer) retry once on a specific,
+    # observed failure mode: the model omits a required tool-call field
+    # even when the response wasn't truncated. A single retry is enough
+    # to recover from what appears to be sporadic model non-compliance
+    # rather than a real bug.
+    max_field_retries: int = 2
 
 
 def load_settings() -> Settings:
