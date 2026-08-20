@@ -1,0 +1,8 @@
+anthropic>=0.40.0
+pydantic>=2.6.0
+python-dotenv>=1.0.0
+tavily-python>=0.5.0
+# Pinned below v2 -- the SDK just released a major version with
+# breaking changes (new MCP spec support, reworked architecture).
+# Bump intentionally later, not by accident via an unpinned install.
+mcp>=1.28,<2

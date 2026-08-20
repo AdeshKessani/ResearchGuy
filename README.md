@@ -84,3 +84,32 @@ Run the eval harness:
 ```bash
 python -m eval.run_eval
 ```
+
+## Running as an MCP server
+ 
+The pipeline is also exposed as an MCP (Model Context Protocol) tool
+via `mcp_server.py`, so it can be called from Claude Desktop or any
+other MCP-compatible client instead of only the CLI.
+ 
+Add this to your Claude Desktop config (`claude_desktop_config.json`):
+ 
+```json
+{
+  "mcpServers": {
+    "ResearchGuy": {
+      "command": "python",
+      "args": ["C:\\path\\to\\ResearchGuy\\mcp_server.py"],
+      "env": {
+        "ANTHROPIC_API_KEY": "your-key-here",
+        "TAVILY_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+ 
+Restart Claude Desktop, and `research_question` becomes available as a
+tool. 
+**Cost note:** every call runs the full pipeline (Planner,
+Researcher, Synthesizer, up to 3 Critic/Reviser passes) typically
+well over a minute and real API spend per call. No cost guard!

@@ -1,9 +1,11 @@
 """
 Code-based citation integrity checks.
 
-Deliberately not an LLM call. Whether every [n] marker in the report
+Deliberately not an LLM call -- whether every [n] marker in the report
 body maps to a real citation index is a mechanical fact, not a judgment
-call, so it should be checked mechanically.
+call, so it should be checked mechanically. Keeping this separate from
+the LLM-as-judge in judge.py also means this metric can never be wrong
+because a judge model had a bad day.
 """
 
 import re
@@ -17,11 +19,16 @@ def citation_integrity(report: FinalReport) -> dict:
 
     all_bracket_numbers = [int(n) for n in re.findall(r"\[(\d+)\]", body)]
 
-    # So thqat the metric doesn't get confused by years in the text, ignore any
-    # bracketed numbers that look like years (1900-2099). This is a
-    # heuristic, but it should be good enough for this purpose.
+    # A source's own title can contain a bracketed year -- e.g. a blog
+    # titled "...When NoSQL Actually Wins [2026]" -- and the Synthesizer
+    # faithfully quotes that title into the report body. A naive regex
+    # can't tell that "[2026]" from a real citation marker like "[47]",
+    # and with max_total_facts capped at 130, no genuine citation number
+    # will ever land in a year-like range anyway. Excluded here rather
+    # than silently dropped, so a genuinely huge citation count wouldn't
+    # get miscategorized without a trace.
     def looks_like_year(n: int) -> bool:
-        return 1800 <= n <= 2099
+        return 1900 <= n <= 2099
 
     citation_numbers = [n for n in all_bracket_numbers if not looks_like_year(n)]
     excluded_as_year = sorted(set(n for n in all_bracket_numbers if looks_like_year(n)))
